@@ -1,0 +1,293 @@
+//ESTE ES EL CODIGO DEL PROGRAMA DE ENVIO DE DATOS VIA SERIAL PC-ARDUINO
+
+#include <Time.h>
+#include <TimeLib.h>
+
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include "DHT.h" 
+
+#define DHTPIN 7 
+#define DHTTYPE DHT11 
+
+time_t fecha;
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x3F,20,4);
+
+byte termometro[8] = {
+    B00100,
+    B01010,
+    B01010,
+    B01110,
+    B11111,
+    B11111,
+    B11111,
+    B01110
+};
+
+byte gotita[8] = {
+    B00100,
+    B00100,
+    B01010,
+    B01010,
+    B10001,
+    B10001,
+    B10001,
+    B01110
+};
+
+byte grados[8] = {
+    B11100,
+    B10100,
+    B11100,
+    B00000,
+    B00000,
+    B00000,
+    B00000,
+    B00000
+};
+
+byte mensajes[8] = {
+    B00100,
+    B01110,
+    B01110,
+    B01110,
+    B11111,
+    B00000,
+    B00100,
+    B00000
+};
+
+byte trash[8] = {
+    B00100,
+    B01110,
+    B11111,
+    B01110,
+    B01110,
+    B01110,
+    B01110,
+    B00000
+};
+
+//VARIABLES
+int EstadoButton = 0;
+
+int Anterior = 0;
+int Salir = 0;
+int Siguiente = 0;
+int Borrar = 0;
+const int  buttonAnterior = 2;
+const int  buttonSalir = 4;
+const int  buttonSiguiente = 12;
+const int  buttonTrash = 13;
+
+int temperatura = 0;
+int humedad = 0;
+int pantalla_activa = 0;
+int mensajes_recibidos = 0;
+const int  button = 8;
+char caracter;
+String comando;
+int mensaje_activo;
+String Mensajes[9];
+
+
+void pantalla_cero(){
+    lcd.clear();
+   lcd.createChar(3, mensajes); 
+   lcd.setCursor(0,1);
+   lcd.write(3);
+  
+   lcd.setCursor(1,1);
+   lcd.print("Mensajes:"); //aqui ponemos los pinchis mensajes
+   lcd.setCursor(10,1);
+   lcd.print(mensajes_recibidos);
+   lcd.setCursor(1,2);
+   lcd.print("Humedad:");
+   lcd.setCursor(9,2);
+   lcd.print(humedad);
+   lcd.setCursor(11,2);
+   lcd.print("%");
+   
+   lcd.createChar(0, gotita); 
+   lcd.setCursor(0,2);
+   lcd.write(0); 
+   
+   lcd.setCursor(1,3);
+   lcd.print("Temperatura: ");
+   lcd.setCursor(13,3);
+   lcd.print(temperatura);
+  
+   lcd.createChar(1, termometro); 
+   lcd.setCursor(0,3);
+   lcd.write(1);
+  
+   lcd.createChar(2, grados); 
+   lcd.setCursor(15,3);
+   lcd.write(2);
+  
+   lcd.setCursor(16,3);
+   lcd.print("C   ");
+  
+   humedad = dht.readHumidity();// Lee la humedad
+   temperatura = dht.readTemperature();//Lee la temperatura
+   //Serial.print(humedad);
+   //Serial.print(",");
+   //Serial.println(temperatura); 
+}
+
+void Mensajes_Clear(){
+  mensajes_recibidos = 0;
+  Mensajes[0] = "SIN MENSAJE";
+  Mensajes[1] = "SIN MENSAJE";
+  Mensajes[2] = "SIN MENSAJE";
+  Mensajes[3] = "SIN MENSAJE";
+  Mensajes[4] = "SIN MENSAJE";
+  Mensajes[5] = "SIN MENSAJE";
+  Mensajes[6] = "SIN MENSAJE";
+  Mensajes[7] = "SIN MENSAJE";
+  Mensajes[8] = "SIN MENSAJE";
+  Mensajes[9] = "SIN MENSAJE";
+}
+
+void Ver_Mensaje(int no_mensaje){
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("MENSAJE RECIBIDO");
+  lcd.setCursor(0,1);
+  lcd.print(Mensajes[no_mensaje]);
+  lcd.setCursor(0,3);
+  lcd.print("ANT    SALIR    SIG");
+
+  lcd.createChar(4, trash); 
+  lcd.setCursor(19,3);
+  lcd.write(4);
+}
+
+void Borrar_Mensajes(){
+  lcd.clear();
+  lcd.setCursor(0,0);
+  lcd.print("¿BORRAR MENSAJES?");
+  lcd.setCursor(0,3);
+  lcd.print("SI                NO");
+}
+
+void setup() {
+  Mensajes_Clear();
+  lcd.backlight();
+  lcd.init(); 
+  lcd.clear();
+  pantalla_cero();
+  Serial.begin(9600);
+  setTime(07, 22, 0, 24, 4, 2018);
+  fecha = now();
+  comando = "";
+}
+
+void loop() {
+   humedad = dht.readHumidity();// Lee la humedad
+   temperatura = dht.readTemperature();//Lee la temperatura
+   fecha = now();
+   
+  while (Serial.available()>0)
+    {
+      caracter= Serial.read();
+      comando.concat(caracter);
+      delay(10); // Este retardo muy corto es para no saturar el puerto           
+      // serie y que la concatenación se haga de forma ordenada.
+    }
+
+    if (comando != ""){
+      Mensajes[mensajes_recibidos] = comando;
+      mensajes_recibidos += 1;
+      comando = "";
+    }
+
+   EstadoButton =  digitalRead(button);
+   if (EstadoButton == HIGH) {
+         pantalla_activa = 1;
+         mensaje_activo = 0;
+         Ver_Mensaje(mensaje_activo);
+   }
+
+   if (pantalla_activa == 1){
+      Anterior = digitalRead(buttonAnterior);
+      if (Anterior == HIGH) {
+        if (mensaje_activo != 0){
+          mensaje_activo -= 1;
+          Ver_Mensaje(mensaje_activo);
+        }
+      } 
+
+      Salir = digitalRead(buttonSalir);
+      if (Salir == HIGH) {
+        pantalla_activa = 0;
+        pantalla_cero();
+      } 
+
+      Siguiente = digitalRead(buttonSiguiente);
+      if (Siguiente == HIGH) {
+        if (mensaje_activo < (mensajes_recibidos - 1)){
+          mensaje_activo += 1;
+          Ver_Mensaje(mensaje_activo);
+        }
+      }       
+
+      Borrar = digitalRead(buttonTrash );
+      if (Borrar == HIGH) {
+        pantalla_activa = 2;
+        Borrar_Mensajes();
+      }      
+   }
+
+   if (pantalla_activa == 2){
+      Anterior = digitalRead(buttonAnterior);
+      if (Anterior == HIGH) {
+            Mensajes_Clear();
+            pantalla_activa = 0;
+            pantalla_cero();
+      } 
+   
+      Borrar = digitalRead(buttonTrash );
+      if (Borrar == HIGH) {
+        pantalla_activa = 1;
+        Ver_Mensaje(mensaje_activo);
+      }      
+   }
+
+
+   if (pantalla_activa == 0){
+     lcd.setCursor(10,1);
+     lcd.print(mensajes_recibidos);
+     
+     lcd.setCursor(9,2);
+     lcd.print(humedad);  
+  
+     lcd.setCursor(13,3);
+     lcd.print(temperatura);
+     
+     lcd.setCursor(0,0);
+     lcd.print(day(fecha));
+     lcd.setCursor(2,0);
+     lcd.print("/");
+     lcd.setCursor(3,0);
+     lcd.print(month(fecha));
+     lcd.setCursor(4,0);
+     lcd.print("/");
+     lcd.setCursor(5,0);
+     lcd.print(year(fecha));
+     lcd.setCursor(9,0);
+     lcd.print(" ");   
+     lcd.setCursor(10,0);
+     lcd.print(hour(fecha));
+     lcd.setCursor(12,0);
+     lcd.print(":");   
+     lcd.setCursor(13,0);
+     lcd.print(minute(fecha));
+     lcd.setCursor(15,0);
+     lcd.print(":");   
+     lcd.setCursor(16,0);
+     lcd.print(second(fecha));   
+   }
+
+}
